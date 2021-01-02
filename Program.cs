@@ -46,6 +46,8 @@ namespace ExrtractAzure
         {
             //var location = Region.EuropeWest;
 
+            args
+
             HaAzureAutenticationModel autenticationModel = new HaAzureAutenticationModel(clientId, clientSecret, tenantId);
             AzureCredentials credentials = HaAzureAuthentication.GetAzCredentials(autenticationModel);
             IAzure azure = HaAzureAuthentication.GetAzManagementClient(credentials);
