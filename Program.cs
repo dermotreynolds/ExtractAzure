@@ -45,9 +45,6 @@ namespace ExrtractAzure
         static void Main(string[] args)
         {
             //var location = Region.EuropeWest;
-            var clientId = "624d289c-1078-451c-a86e-bd145fe77a58";
-            var clientSecret = "1rKHn_2-O2jv6x66k~O2-_GlP4RKKNTmc0";
-            var tenantId = "184e4ab4-a9bf-4b68-a72f-eb4e03b54ae1";
 
             HaAzureAutenticationModel autenticationModel = new HaAzureAutenticationModel(clientId, clientSecret, tenantId);
             AzureCredentials credentials = HaAzureAuthentication.GetAzCredentials(autenticationModel);
