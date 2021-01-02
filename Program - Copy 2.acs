@@ -1,0 +1,523 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Azure.Management.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent;
+using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using Microsoft.Azure.Management.Sql.Fluent;
+using Microsoft.Azure.Management.Sql.Fluent.SqlServerKeyOperations.SqlServerKeyActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.Models;
+using Microsoft.Azure.Management.Sql.Fluent.SqlVirtualNetworkRuleOperations.SqlVirtualNetworkRuleActionsDefinition;
+
+using Microsoft.Azure.Management.Sql.Fluent.SqlDatabaseOperations.SqlDatabaseActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.SqlElasticPoolOperations.SqlElasticPoolActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.SqlEncryptionProtectorOperations.SqlEncryptionProtectorActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.SqlFailoverGroupOperations.SqlFailoverGroupActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.SqlFirewallRuleOperations.SqlFirewallRuleActionsDefinition;
+using Microsoft.Azure.Management.Sql.Fluent.SqlServerDnsAliasOperations.SqlServerDnsAliasActionsDefinition;
+
+
+//using Json.Net;
+using MongoDB.Driver;
+using System.Reflection;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using System.Runtime.Serialization;
+using System.Reflection;
+using System.IO;
+using System.Dynamic;
+
+namespace ExrtractAzure
+{
+
+    class HaSqlServerSerializer : IFormatter
+    {
+        private string _SystemAssignedManagedServiceIdentityTenantId;
+        private string _Version;
+        private string _SystemAssignedManagedServiceIdentityPrincipalId;
+        private IdentityType _ManagedServiceIdentityType;
+        private string _Kind;
+        private string _FullyQualifiedDomainName;
+        private bool _IsManagedServiceIdentityEnabled;
+        private string _AdministratorLogin;
+        private string _State;
+        private string _Name;
+        private string _ResourceGroupName;
+
+        private ISqlDatabaseActionsDefinition _Databases;
+        private ISqlServerDnsAliasActionsDefinition _DnsAliases;
+        private ISqlServerKeyActionsDefinition _ISqlServerKeyActionsDefinition;
+        private ISqlElasticPoolActionsDefinition _ElasticPools;
+        private ISqlFailoverGroupActionsDefinition _FailoverGroups;
+        private ISqlEncryptionProtectorActionsDefinition _EncryptionProtectors;
+        private ISqlVirtualNetworkRuleActionsDefinition _VirtualNetworkRules;
+        private ISqlFirewallRuleActionsDefinition _FirewallRules;
+
+        private System.Type _type;
+        private System.Type _listtype;
+        private System.Type _itemtype;
+
+        public ISurrogateSelector SurrogateSelector { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public SerializationBinder Binder { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public StreamingContext Context { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        //ISqlDatabaseActionsDefinition ISqlDatabase
+        public class PropertyRenameAndIgnoreSerializerContractResolver : DefaultContractResolver
+        {
+            private readonly Dictionary<System.Type, HashSet<string>> _ignores;
+            private readonly Dictionary<System.Type, Dictionary<string, string>> _renames;
+
+            public PropertyRenameAndIgnoreSerializerContractResolver()
+            {
+                _ignores = new Dictionary<System.Type, HashSet<string>>();
+                _renames = new Dictionary<System.Type, Dictionary<string, string>>();
+            }
+
+            public void IgnoreProperty(System.Type type, params string[] jsonPropertyNames)
+            {
+
+
+                if (!_ignores.ContainsKey(type))
+                    _ignores[type] = new HashSet<string>();
+
+                Console.WriteLine(_ignores[type]);
+
+                foreach (var prop in jsonPropertyNames)
+                    _ignores[type].Add(prop);
+            }
+
+            public void RenameProperty(System.Type type, string propertyName, string newJsonPropertyName)
+            {
+                if (!_renames.ContainsKey(type))
+                    _renames[type] = new Dictionary<string, string>();
+
+                _renames[type][propertyName] = newJsonPropertyName;
+            }
+
+            protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization)
+            {
+                var property = base.CreateProperty(member, memberSerialization);
+
+                if (IsIgnored(property.DeclaringType, property.PropertyName))
+                {
+                    property.ShouldSerialize = i => false;
+                    property.Ignored = true;
+                }
+
+                if (IsRenamed(property.DeclaringType, property.PropertyName, out var newJsonPropertyName))
+                    property.PropertyName = newJsonPropertyName;
+
+                return property;
+            }
+
+            private bool IsIgnored(System.Type type, string jsonPropertyName)
+            {
+                if (!_ignores.ContainsKey(type))
+                    return false;
+
+                return _ignores[type].Contains(jsonPropertyName);
+            }
+
+            private bool IsRenamed(System.Type type, string jsonPropertyName, out string newJsonPropertyName)
+            {
+                Dictionary<string, string> renames;
+
+                if (!_renames.TryGetValue(type, out renames) || !renames.TryGetValue(jsonPropertyName, out newJsonPropertyName))
+                {
+                    newJsonPropertyName = null;
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+
+        public List<PropertyInfo> ListObject(Object inputObject, System.Type listtype)
+        {
+            _listtype = listtype;
+
+            //if(_listtype.Name == "ISqlDatabaseActionsDefinition")
+            //{
+                
+            //    ISqlDatabaseActionsDefinition processObjects = (ISqlDatabaseActionsDefinition)inputObject;
+            //    _itemtype = typeof(ISqlDatabase);
+
+            //    foreach (var processObject in processObjects.List())
+            //    {
+            //        Console.WriteLine(JsonConvert.SerializeObject(processObject, Formatting.Indented));
+
+            //        //Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", processObject.Name), Formatting.Indented);
+            //        //foreach (PropertyInfo propertyInfo in GetProperties(_itemtype.GetProperties()))
+            //        //{
+            //        //    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(processObject)));
+            //        //}
+            //    }
+
+            //    //Console.WriteLine(listtype.Name);
+            //}
+
+            //if (_listtype.Name == "ISqlDatabaseActionsDefinition")
+            //{
+
+            //    ISqlDatabaseActionsDefinition processObjects = (ISqlDatabaseActionsDefinition)inputObject;
+            //    _itemtype = typeof(ISqlDatabase);
+
+            //    foreach (var aprocessObject in processObjects.List())
+            //    {
+            //        Console.WriteLine(JsonConvert.SerializeObject(aprocessObject, Formatting.Indented));
+            //    }
+
+            //}
+
+            if (_listtype.Name == "ISqlServerKeyActionsDefinition")
+            {
+
+                ISqlServerKeyActionsDefinition processObjects = (ISqlServerKeyActionsDefinition)inputObject;
+                _itemtype = typeof(ISqlServerKey);
+
+                foreach (var bprocessObject in processObjects.List())
+                {
+                    var jsonResolver = new PropertyRenameAndIgnoreSerializerContractResolver();
+                    jsonResolver.IgnoreProperty(typeof(ISqlServerKey), "Manager");
+                    //jsonResolver.RenameProperty(typeof(ISqlServerKey), "Manager");
+
+                    var serializerSettings = new JsonSerializerSettings();
+                    serializerSettings.ContractResolver = jsonResolver;
+
+                    Console.WriteLine(JsonConvert.SerializeObject(bprocessObject, serializerSettings));
+                }
+
+            }
+
+
+            return null;
+
+        }
+        public List<PropertyInfo> GetProperties(PropertyInfo[] propertyInfo)
+        {
+            List<PropertyInfo> properties = propertyInfo.ToList();
+
+            return properties;
+        }
+        public void CustomSerialize(ISqlDatabaseActionsDefinition inputObjects, System.Type type)
+        {
+            _type = type;
+
+             //Console.WriteLine(_type.Name);
+            Console.WriteLine(JsonConvert.SerializeObject(String.Format("\t\t{0}:{1}", "Name", _type.Name), Formatting.Indented));
+            //List<PropertyInfo> properties = _type.GetProperties().ToList();
+
+       
+
+
+            foreach (var inputObject in inputObjects.List())
+            {
+                Console.WriteLine(JsonConvert.SerializeObject(String.Format("\t\t{0}:{1}", "Name", inputObject.Name), Formatting.Indented));
+                foreach (PropertyInfo propertyInfo in GetProperties(_type.GetProperties()))
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(inputObject)));
+                }
+
+            }
+
+
+        }
+
+        public object Deserialize(Stream serializationStream)
+        {
+            throw new NotImplementedException();
+        }
+
+        public string Serialize(ISqlServer sqlServer)
+        {
+
+
+
+            _type = typeof(ISqlDatabase);
+            Console.WriteLine(_type.Name);
+            List<PropertyInfo> properties = _type.GetProperties().ToList();
+            foreach (var sqlDatabases in sqlServer.Databases.List())
+            {
+                Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", sqlDatabases.Name));
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(sqlDatabases)));
+                }
+
+            }
+
+            properties = null;
+            _type = typeof(ISqlServerDnsAlias);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var dnsAliases in sqlServer.DnsAliases.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(dnsAliases)));
+                }
+            }
+
+            properties = null;
+            _type = typeof(ISqlServerKey);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var serverKey in sqlServer.ServerKeys.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(serverKey)));
+                }
+            }
+
+            // ISqlElasticPoolActionsDefinition
+            properties = null;
+            _type = typeof(ISqlElasticPool);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var elasticPool in sqlServer.ElasticPools.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(elasticPool)));
+                }
+                Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", elasticPool.Name));
+            }
+
+            // ISqlFailoverGroupActionsDefinition
+            properties = null;
+            _type = typeof(ISqlFailoverGroup);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var failoverGroup in sqlServer.FailoverGroups.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(failoverGroup)));
+                }
+                Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", failoverGroup.Name));
+            }
+
+            //This bombs out
+            ////ISqlEncryptionProtectorActionsDefinition
+            //_type = typeof(ISqlEncryptionProtector);
+            //Console.WriteLine(_type.Name);
+            //properties = _type.GetProperties().ToList();
+
+            //foreach (var encryptionProtector in sqlServer.EncryptionProtectors.List())
+            //{
+            //    foreach (PropertyInfo propertyInfo in properties)
+            //    {
+            //        Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(encryptionProtector)));
+            //    }
+
+            //}
+
+            //ISqlFirewallRuleActionsDefinition
+            properties = null;
+            _type = typeof(ISqlFirewallRule);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var firewallRule in sqlServer.FirewallRules.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(firewallRule)));
+                }
+                Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", firewallRule.Name));
+            }
+
+            //ISqlVirtualNetworkRuleActionsDefinition
+            properties = null;
+            _type = typeof(ISqlVirtualNetworkRule);
+            Console.WriteLine(_type.Name);
+            properties = _type.GetProperties().ToList();
+
+            foreach (var sqlVnetRule in sqlServer.VirtualNetworkRules.List())
+            {
+                foreach (PropertyInfo propertyInfo in properties)
+                {
+                    Console.WriteLine(String.Format("\t\t{0}:{1}", propertyInfo.Name, propertyInfo.GetValue(sqlVnetRule)));
+                }
+                Console.WriteLine(String.Format("\t\t{0}:{1}", "Name", sqlVnetRule.Name));
+            }
+
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "SystemAssignedManagedServiceIdentityPrincipalId", sqlServer.SystemAssignedManagedServiceIdentityPrincipalId));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "Version", sqlServer.Version));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "SystemAssignedManagedServiceIdentityTenantId", sqlServer.SystemAssignedManagedServiceIdentityTenantId));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "ManagedServiceIdentityType", sqlServer.ManagedServiceIdentityType));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "Kind", sqlServer.Kind));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "FullyQualifiedDomainName", sqlServer.FullyQualifiedDomainName));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "IsManagedServiceIdentityEnabled", sqlServer.IsManagedServiceIdentityEnabled));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "AdministratorLogin", sqlServer.AdministratorLogin));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "State", sqlServer.State));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "Name", sqlServer.Name));
+
+            Console.WriteLine(String.Format("\t\t{0}\t:{1}", "ResourceGroupName", sqlServer.ResourceGroupName));
+
+            return null;
+        }
+
+        public void Serialize(Stream serializationStream, object graph)
+        {
+            throw new NotImplementedException();
+        }
+
+ 
+    }
+
+    class Program
+    {
+
+        private static string GetSerializedObject(Object objForSerialize)
+        {
+
+            System.Type myType = objForSerialize.GetType();
+            //System.Type myType = inputType;
+            //myType = typeof(ISqlServer);
+            Console.WriteLine(objForSerialize.GetType().Name);
+            Console.WriteLine(objForSerialize.GetType());
+            var customObject = new ExpandoObject() as IDictionary<string, Object>;
+            ////var myType = typeof(ISqlDatabase);
+            ////Console.WriteLine(myType.Name);
+
+            IList<PropertyInfo> props = new List<PropertyInfo>(myType.GetProperties());
+
+            foreach (PropertyInfo prop in props)
+            {
+                //Console.WriteLine(prop.Name);
+                //Console.WriteLine(prop.GetValue(objForSerialize, null));
+                //foreach (var propForSer in propertyForSerialization)
+                //{
+
+                if (prop.Name == "Parent")
+                {
+                    Console.WriteLine("Parent");
+                }
+                else if (prop.Name == "Manager")
+                { }
+                else
+                {
+
+                    customObject.Add(prop.Name, prop.GetValue(objForSerialize, null));
+                    //Console.WriteLine(JsonConvert.SerializeObject(customObject, Formatting.Indented));
+                }
+                //}
+            }
+
+            return JsonConvert.SerializeObject(customObject, Formatting.Indented);
+        }
+
+
+        static void Main(string[] args)
+        {
+            var location = Region.EuropeWest;
+            var clientId = "624d289c-1078-451c-a86e-bd145fe77a58";
+            var clientSecret = "1rKHn_2-O2jv6x66k~O2-_GlP4RKKNTmc0";
+            var tenantId = "184e4ab4-a9bf-4b68-a72f-eb4e03b54ae1";
+
+
+            var credentials = SdkContext.AzureCredentialsFactory
+              .FromServicePrincipal(clientId, clientSecret, tenantId, AzureEnvironment.AzureGlobalCloud);
+
+            var azure = Azure
+                .Configure()
+                .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
+                .Authenticate(credentials)
+                .WithDefaultSubscription();
+
+            var sqlSerializer = new HaSqlServerSerializer();
+
+            //Works
+            //foreach(var sqlServer in azure.SqlServers.List())
+            //{
+            //    sqlSerializer.CustomSerialize(sqlServer.Databases, typeof(ISqlDatabase));
+            //}
+             
+            foreach (var sqlServer in azure.SqlServers.List())
+            {
+                //Console.WriteLine(sqlServer.Name);
+                //sqlSerializer.CustomSerialize(sqlServer.Databases, typeof(ISqlDatabase));
+
+                //sqlSerializer.ListObject(sqlServer.Databases, typeof(ISqlDatabaseActionsDefinition));
+                //sqlSerializer.ListObject(sqlServer.ServerKeys, typeof(ISqlServerKeyActionsDefinition));
+
+                Console.WriteLine(sqlServer.GetType());
+                Console.WriteLine(GetSerializedObject(sqlServer));
+
+                //Console.WriteLine(GetSerializedObject(sqlServer));
+
+
+                //var json = JsonConvert.SerializeObject(sqlServer, Formatting.Indented, new JsonSerializerSettings()
+                //{
+                //    ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore
+                //});
+
+                //Console.WriteLine(json);
+
+                foreach (var keys in sqlServer.Databases.List())
+                {
+
+                    //var propertyForSerialization = new List<string> { "ISqlDatabase", "" };
+
+                    //Console.WriteLine(GetSerializedObject(keys));
+
+
+
+                }
+
+                //var jsonResolver = new PropertyRenameAndIgnoreSerializerContractResolver();
+                //jsonResolver.IgnoreProperty(typeof(ISqlServerKey), "Manager");
+                ////jsonResolver.RenameProperty(typeof(ISqlServerKey), "Manager");
+
+                //var serializerSettings = new JsonSerializerSettings();
+                //serializerSettings.ContractResolver = jsonResolver;
+
+
+            }
+
+
+
+
+
+            //foreach (var sqlServer in azure.SqlServers.List())
+            //{
+
+            //    var json = sqlSerializer.Serialize(sqlServer);
+
+            //}
+
+
+            //Requirements
+            //var InputObject = azure.NetworkSecurityGroups;
+            //getMeJOSN(InputObject); //Writes json to console
+
+            //var InputObject = azure.SqlServers;
+            //getMeJOSN(InputObject); //Writes json to console
+
+            //If not working:   2 days @ $120/day = $240
+            //If working:       4 days @ $120/day = $480
+
+
+
+        }
+
+
+    }
+}
