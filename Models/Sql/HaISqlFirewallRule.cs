@@ -1,4 +1,5 @@
 ﻿using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
+using System.Collections.Generic;
 
 namespace ExrtractAzure
 {
@@ -17,6 +18,9 @@ namespace ExrtractAzure
         public string Type { get; set; }
 
         public string Id { get; set; }
+
+        public IReadOnlyDictionary<string, string> Tags { get; set; }
+
         //
         // Summary:
         //     Gets name of the SQL Server to which this Firewall Rule belongs.

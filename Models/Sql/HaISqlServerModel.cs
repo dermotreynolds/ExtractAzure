@@ -48,6 +48,11 @@ namespace ExrtractAzure
 
         public string State { get; set; }
 
+        //
+        // Summary:
+        //     Gets the tags for the current SQL Server
+        public IReadOnlyDictionary<string, string> Tags { get; set; }
+
         //public HaISqlServerKey sqlServerKey { get; set; }
 
         public List<HaISqlServerKey> sqlServerKeys { get; set; }

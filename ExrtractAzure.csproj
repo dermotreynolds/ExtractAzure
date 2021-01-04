@@ -232,9 +232,8 @@
     <Compile Include="Models\Sql\HaISqlFirewallRule.cs" />
     <Compile Include="Models\Sql\HaISqlVirtualNetworkRule.cs" />
     <Compile Include="Models\Sql\HaAzureAutenticationModel.cs" />
+    <Compile Include="Sandpit\ActivityLog.cs" />
     <Compile Include="Services\HaAzureAutentication.cs" />
-    <None Include="Program - Copy.acs" />
-    <None Include="Program - Copy 2.acs" />
     <Compile Include="Models\Sql\HaISqlDatabaseModel.cs" />
     <Compile Include="Models\Sql\HaISqlElasticPoolModel.cs" />
     <Compile Include="Models\Sql\HaISqlEncryptionProtectorModel.cs" />

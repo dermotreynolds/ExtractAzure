@@ -1,36 +1,12 @@
 ﻿
 using Microsoft.Azure.Management.Fluent;
-//using AutoMapper;
-//using System.Dynamic;
 using Microsoft.Azure.Management.ResourceManager.Fluent.Authentication;
 using Microsoft.Azure.Management.Sql.Fluent;
 using Newtonsoft.Json;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlServerKeyOperations.SqlServerKeyActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.Models;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlVirtualNetworkRuleOperations.SqlVirtualNetworkRuleActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlChildrenOperations.SqlChildrenActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlServerDnsAliasOperations.SqlServerDnsAliasActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlElasticPoolOperations.SqlElasticPoolActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlDatabaseOperations.SqlDatabaseActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlFailoverGroupOperations.SqlFailoverGroupActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlEncryptionProtectorOperations.SqlEncryptionProtectorActionsDefinition;
-//using Microsoft.Azure.Management.Sql.Fluent.SqlFirewallRuleOperations.SqlFirewallRuleActionsDefinition;
-
 using System;
 using System.IO;
-using System.Linq;
-
-//using Microsoft.Azure.Commands.Common.Authentication;
-//using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
-//using Microsoft.Azure.Commands.ResourceManager.Common.ArgumentCompleters;
-//using Microsoft.Azure.Commands.Sql.Server.Model;
-//using Microsoft.WindowsAzure.Commands.Common;
-//using System.Collections.Generic;
-//using System.IO;
-//using System.Management.Automation;
-//using System.Reflection;
 using System.Collections.Generic;
-using Microsoft.WindowsAzure.Storage;
+
 
 
 
@@ -46,9 +22,10 @@ namespace ExrtractAzure
         {
             //var location = Region.EuropeWest;
 
-            args
+            string json = File.ReadAllText("azureauth.properties");
+            Credentials localCredentials = JsonConvert.DeserializeObject<Credentials>(json);
 
-            HaAzureAutenticationModel autenticationModel = new HaAzureAutenticationModel(clientId, clientSecret, tenantId);
+            HaAzureAutenticationModel autenticationModel = new HaAzureAutenticationModel(localCredentials.clientId, localCredentials.clientSecret, localCredentials.tenantId);
             AzureCredentials credentials = HaAzureAuthentication.GetAzCredentials(autenticationModel);
             IAzure azure = HaAzureAuthentication.GetAzManagementClient(credentials);
 
@@ -74,61 +51,12 @@ namespace ExrtractAzure
             String jsonString = null;
             List<HaISqlServerModel> sqlServerModels = new List<HaISqlServerModel>();
 
-
-            //#Quick Activity Log Test###################################################
-            DateTime recordDateTime = DateTime.Now;
-            // get activity logs for the same period.
-            var logs = azure.ActivityLogs.DefineQuery()
-                    .StartingFrom(recordDateTime.AddDays(-7))
-                    .EndsBefore(recordDateTime)
-                    .WithAllPropertiesInResponse()
-                    .FilterByResource("/subscriptions/bc0b3b15-7d6c-4fa4-b3a7-d208b08fde5c/resourceGroups/DELETE/providers/Microsoft.Sql/servers/testtestdr01")
-                    .Execute();
-
-            Console.WriteLine("Activity logs for the Storage Account:");
-
-            foreach (var eventData in logs)
-            {
-
-                //Console.WriteLine("\tDateTime: " + eventData.EventTimestamp);
-                //Console.WriteLine("\tEvent: " + eventData.EventName?.LocalizedValue);
-                //Console.WriteLine("\tOperation: " + eventData.OperationName?.LocalizedValue);
-                //Console.WriteLine("\tCaller: " + eventData.Caller);
-                //Console.WriteLine("\tCorrelationId: " + eventData.CorrelationId);
-                //Console.WriteLine("\tSubscriptionId: " + eventData.SubscriptionId);
-
-                Console.WriteLine("{0}\t{1}\t{2}\t{3}\t{4}\t{5}", eventData.EventTimestamp, eventData.EventName?.LocalizedValue, eventData.Caller, eventData.CorrelationId, eventData.SubscriptionId, eventData.OperationName?.LocalizedValue);
-                //console.writeline("\tevent: " + eventdata.eventname?.localizedvalue);
-                //console.writeline("\toperation: " + eventdata.operationname?.localizedvalue);
-                //console.writeline("\tcaller: " + eventdata.caller);
-                //console.writeline("\tcorrelationid: " + eventdata.correlationid);
-                //console.writeline("\tsubscriptionid: " + eventdata.subscriptionid);
-            }
-
-
-            //#Quick Activity Log Test###################################################
-
-            //#Quick Network Watcher Test#######################
-
-            
-
-            //#Quick Network Watcher Test#######################
-
-
-
-
-
-
-
-
-
-
             foreach (var sqlServer in azure.SqlServers.List())
             {
 
-                //HaISqlServerModel objSqlServer = LoadSqlServerCoreProperties(sqlServer);
+                HaISqlServerModel objSqlServer = LoadSqlServerCoreProperties(azure, sqlServer);
 
-                //LoadSqlServerKeys(sqlServer, objSqlServer);
+                //LoadSqlServerKeys(azure, sqlServer, objSqlServer);
 
                 //LoadElasticPools(azure, sqlServer, objSqlServer);
 
@@ -136,15 +64,15 @@ namespace ExrtractAzure
 
                 //LoadSqlDatabases(azure, sqlServer, objSqlServer);
 
-                //LoadSqlFailoverGroups(sqlServer, objSqlServer);
+                //LoadSqlFailoverGroups(azure, sqlServer, objSqlServer);
 
-                //LoadSqlEncryptionProtectors(sqlServer, objSqlServer);
+                LoadSqlEncryptionProtectors(azure, sqlServer, objSqlServer);
 
-                //LoadSqlVirtualNetworkRules(sqlServer, objSqlServer);
+                LoadSqlVirtualNetworkRules(azure, sqlServer, objSqlServer);
 
-                //LoadSqlFirewallRules(sqlServer, objSqlServer);
+                LoadSqlFirewallRules(azure, sqlServer, objSqlServer);
 
-                //sqlServerModels.Add(objSqlServer);
+                sqlServerModels.Add(objSqlServer);
 
             }
 
@@ -152,37 +80,42 @@ namespace ExrtractAzure
             //Console.WriteLine(jsonString);
         }
 
-        private static HaISqlServerModel LoadSqlServerCoreProperties(ISqlServer sqlServer)
+        private static HaISqlServerModel LoadSqlServerCoreProperties(IAzure azure, ISqlServer sqlServer)
         {
-            var objSqlServer = new HaISqlServerModel();
+            var myObject = new HaISqlServerModel();
 
-            //Name, ResourceGroupName, SubscriptionId, Region, RegionName 
-            objSqlServer.Name = sqlServer.Name;
+            string myId = sqlServer.Id;
 
-            objSqlServer.ResourceGroupName = sqlServer.ResourceGroupName;
-            objSqlServer.SubscriptionId = sqlServer.Id.Split('/')[2];
-            objSqlServer.Region = sqlServer.Region;
-            objSqlServer.RegionName = sqlServer.Region.Name;
+            //Id, Type, Name, ResourceGroupName, SubscriptionId, Region, RegionName, Type
 
+            myObject.Id = myId;
+            myObject.Type = azure.GenericResources.GetById(myId).Type;
+            myObject.Name = azure.GenericResources.GetById(myId).Name;
+            myObject.ResourceGroupName = azure.GenericResources.GetById(myId).ResourceGroupName;
+            myObject.SubscriptionId = azure.GenericResources.GetById(myId).Id.Split('/')[2];
+            myObject.Region = azure.GenericResources.GetById(myId).Region;
+            myObject.RegionName = azure.GenericResources.GetById(myId).RegionName;
+            myObject.Tags = azure.GenericResources.GetById(myId).Tags;
             //Type, Id
-            objSqlServer.Type = sqlServer.Type;
-            objSqlServer.Id = sqlServer.Id;
+
+
 
             //Specifics
-            objSqlServer.Version = sqlServer.Version;
-            objSqlServer.SystemAssignedManagedServiceIdentityPrincipalId = sqlServer.SystemAssignedManagedServiceIdentityPrincipalId;
-            objSqlServer.SystemAssignedManagedServiceIdentityTenantId = sqlServer.SystemAssignedManagedServiceIdentityTenantId;
-            objSqlServer.Kind = sqlServer.Kind;
-            objSqlServer.FullyQualifiedDomainName = sqlServer.FullyQualifiedDomainName;
-            objSqlServer.IsManagedServiceIdentityEnabled = sqlServer.IsManagedServiceIdentityEnabled;
-            objSqlServer.AdministratorLogin = sqlServer.AdministratorLogin;
-            objSqlServer.State = sqlServer.State;
-            objSqlServer.ManagedServiceIdentityType = sqlServer.ManagedServiceIdentityType;
-            return objSqlServer;
+            myObject.Version = sqlServer.Version;
+            myObject.SystemAssignedManagedServiceIdentityPrincipalId = sqlServer.SystemAssignedManagedServiceIdentityPrincipalId;
+            myObject.SystemAssignedManagedServiceIdentityTenantId = sqlServer.SystemAssignedManagedServiceIdentityTenantId;
+            myObject.Kind = sqlServer.Kind;
+            myObject.FullyQualifiedDomainName = sqlServer.FullyQualifiedDomainName;
+            myObject.IsManagedServiceIdentityEnabled = sqlServer.IsManagedServiceIdentityEnabled;
+            myObject.AdministratorLogin = sqlServer.AdministratorLogin;
+            myObject.State = sqlServer.State;
+            myObject.ManagedServiceIdentityType = sqlServer.ManagedServiceIdentityType;
+            return myObject;
         }
 
-        private static void LoadSqlFirewallRules(ISqlServer sqlServer, HaISqlServerModel objSqlServer)
+        private static void LoadSqlFirewallRules(IAzure azure, ISqlServer sqlServer, HaISqlServerModel objSqlServer)
         {
+            // firewallRules cannot be referenced by GenericResource.Id 
 
             List<HaISqlFirewallRule> objSqlFirewallRules = new List<HaISqlFirewallRule>();
 
@@ -191,16 +124,18 @@ namespace ExrtractAzure
 
 
 
+                
 
                 objSqlFirewallRules.Add(new HaISqlFirewallRule()
                 {
-                    //Name, ResourceGroupName, SubscriptionId, Region, RegionName 
+                    //Id, Type, Name, ResourceGroupName, SubscriptionId, Region, RegionName, Type
+
                     Name = firewallRule.Name,
                     ResourceGroupName=firewallRule.ResourceGroupName,
                     SubscriptionId=firewallRule.Id.Split('/')[2],
                     Region=firewallRule.Region,
                     //Type, Id
-                    Type = "SqlFirewallRule",
+                    Type = "firewallRules",
                     Id = firewallRule.Id,
                     //Specifics
                     Kind = firewallRule.Kind,
@@ -216,10 +151,14 @@ namespace ExrtractAzure
             objSqlServer.sqlFirewallRules = objSqlFirewallRules;
         }
 
-        private static void LoadSqlVirtualNetworkRules(ISqlServer sqlServer, HaISqlServerModel objSqlServer)
+        private static void LoadSqlVirtualNetworkRules(IAzure azure, ISqlServer sqlServer, HaISqlServerModel objSqlServer)
         {
             foreach (var virtualNetworkRules in sqlServer.VirtualNetworkRules.List())
             {
+                // Unsure if this can be referenced by GenericResource.Id 
+
+                Console.WriteLine(azure.GenericResources.GetById(virtualNetworkRules.Id).Type);
+
                 List<HaISqlVirtualNetworkRule> objSqlVirtualNetworkRules = new List<HaISqlVirtualNetworkRule>();
 
                 objSqlVirtualNetworkRules.Add(new HaISqlVirtualNetworkRule()
@@ -247,12 +186,16 @@ namespace ExrtractAzure
             }
         }
 
-        private static void LoadSqlEncryptionProtectors(ISqlServer sqlServer, HaISqlServerModel objSqlServer)
+        private static void LoadSqlEncryptionProtectors(IAzure azure, ISqlServer sqlServer, HaISqlServerModel objSqlServer)
         {
             string strRegionName;
 
             foreach (var encryptionProtector in sqlServer.EncryptionProtectors.List())
             {
+                // Microsoft.Sql/servers/encryptionProtector can be referenced by GenericResource.Id 
+
+                Console.WriteLine(azure.GenericResources.GetById(encryptionProtector.Id).Type);
+
 
                 List<HaISqlEncryptionProtectorModel> objSqlEncryptionProtectors = new List<HaISqlEncryptionProtectorModel>();
 
@@ -283,11 +226,14 @@ namespace ExrtractAzure
             }
         }
 
-        private static void LoadSqlFailoverGroups(ISqlServer sqlServer, HaISqlServerModel objSqlServer)
+        private static void LoadSqlFailoverGroups(IAzure azure, ISqlServer sqlServer, HaISqlServerModel objSqlServer)
         {
             foreach (var failoverGroup in sqlServer.FailoverGroups.List())
             {
-                //TODO
+                // Unsure if this can be referenced by GenericResource.Id 
+
+                Console.WriteLine(azure.GenericResources.GetById(failoverGroup.Id).Type);
+
                 List<HaISqlFailoverGroup> objSqlFailoverGroups = new List<HaISqlFailoverGroup>();
 
                 objSqlFailoverGroups.Add(new HaISqlFailoverGroup()
@@ -330,9 +276,23 @@ namespace ExrtractAzure
             
             foreach (var sqlDatabase in sqlServer.Databases.List())
             {
-                
+
+                // Microsoft.Sql/servers/databases can be referenced by GenericResource.Id 
+
+                Console.WriteLine(azure.GenericResources.GetById(sqlDatabase.Id).Type);
+
+                string myId = sqlDatabase.Id;
+
                 objSqlDatabase.Add(new HaISqlDatabase()
                 {
+
+                    //Name = azure.GenericResources.GetById(elasticPool.Id).Name,
+                    //ResourceGroupName = azure.GenericResources.GetById(elasticPool.Id).ResourceGroupName,
+                    //SubscriptionId = azure.GenericResources.GetById(elasticPool.Id).Id.Split('/')[2],
+                    //Region = azure.GenericResources.GetById(elasticPool.Id).Region,
+                    //RegionName = azure.GenericResources.GetById(elasticPool.Id).RegionName,
+                    //Type = azure.GenericResources.GetById(elasticPool.Id).Type,
+
                     //Name, ResourceGroupName, SubscriptionId, Region, RegionName 
                     Name = azure.GenericResources.GetById(sqlDatabase.Id).Name,
                     ResourceGroupName = azure.GenericResources.GetById(sqlDatabase.Id).ResourceGroupName,
@@ -361,7 +321,6 @@ namespace ExrtractAzure
                     Tags = azure.GenericResources.GetById(sqlDatabase.Id).Tags,
                     ParentId =sqlDatabase.ParentId,
                     SqlServerName=sqlDatabase.SqlServerName
-
                 }
                 );
 
@@ -374,7 +333,10 @@ namespace ExrtractAzure
             List<HaISqlServerDnsAlias> objSqlDnsAlias = new List<HaISqlServerDnsAlias>();
             foreach (var dnsAlias in sqlServer.DnsAliases.List())
             {
-                
+
+                // Microsoft.Sql/servers/dnsAliases can be referenced by GenericResource.Id 
+
+                Console.WriteLine(azure.GenericResources.GetById(dnsAlias.Id).Type);
 
                 objSqlDnsAlias.Add(new HaISqlServerDnsAlias()
                 {
@@ -406,27 +368,25 @@ namespace ExrtractAzure
             {
                 List<HaISqlElasticPool> objSqlElasticPool = new List<HaISqlElasticPool>();
 
-                //string strRegionName = null;
+                // Microsoft.Sql/servers/elasticPools can be referenced by GenericResource.Id 
 
-                //if (elasticPool.Region != null)
-                //{
-                //    strRegionName = elasticPool.Region.Name;
-                //}
-                //else
-                //{
-                //    strRegionName = null;
-                //}
+
+                Console.WriteLine(azure.GenericResources.GetById(elasticPool.Id).Type);
+
+
+
 
                 objSqlElasticPool.Add(new HaISqlElasticPool()
                 {
                     //Name, ResourceGroupName, SubscriptionId, Region, RegionName
                     Name = azure.GenericResources.GetById(elasticPool.Id).Name,
                     ResourceGroupName = azure.GenericResources.GetById(elasticPool.Id).ResourceGroupName,
-                    SubscriptionId = elasticPool.Id.Split('/')[2],
+                    SubscriptionId = azure.GenericResources.GetById(elasticPool.Id).Id.Split('/')[2],
                     Region = azure.GenericResources.GetById(elasticPool.Id).Region,
                     RegionName = azure.GenericResources.GetById(elasticPool.Id).RegionName,
-                    //Type,Id
                     Type = azure.GenericResources.GetById(elasticPool.Id).Type,
+                    //Type,Id
+
                     Id = elasticPool.Id,
                     //Specifics
                     DatabaseDtuMin = elasticPool.DatabaseDtuMin,
@@ -447,10 +407,15 @@ namespace ExrtractAzure
             }
         }
 
-        private static void LoadSqlServerKeys(ISqlServer sqlServer, HaISqlServerModel objSqlServer)
+        private static void LoadSqlServerKeys(IAzure azure, ISqlServer sqlServer, HaISqlServerModel objSqlServer)
         {
             foreach (var svrKey in sqlServer.ServerKeys.List())
             {
+                // Microsoft.Sql/servers/keys can be referenced by GenericResource.Id 
+
+
+                Console.WriteLine(azure.GenericResources.GetById(svrKey.Id).Type);
+
                 //HaISqlServerKey objServerKey = new HaISqlServerKey();
                 List<HaISqlServerKey> objSqlServerKey = new List<HaISqlServerKey>();
 
