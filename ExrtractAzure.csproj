@@ -262,6 +262,7 @@
     <TypeScriptCompile Include="Scripts\typings\go\go-2.1.32.d.ts" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Services\Sql\" />
     <Folder Include="Web\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
